@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "SOSSEN Microinverter",
-        "description": "Enter the connection details for your SOSSEN inverter.\n\n**Device IP**: The local IP address of your inverter (check your router's DHCP client list).\n\n**Device ID**: Open the Smart Life app → your inverter → Settings (top right ⚙️) → Device Information → Device ID.\n\n**Local Key**: Obtain from the [Tuya IoT Platform](https://iot.tuya.com). Create a project, link your Smart Life account, then find the device's Local Key under Devices → All Devices.",
+        "description": "Enter the connection details for your SOSSEN inverter.",
         "data": {
           "device_ip": "Device IP Address",
           "device_id": "Device ID",
@@ -14,7 +14,7 @@
         "data_description": {
           "device_ip": "Local IP of the inverter (e.g. 192.168.1.x)",
           "device_id": "Smart Life app → Settings → Device Information → Device ID",
-          "local_key": "From Tuya IoT Platform (iot.tuya.com) → Devices → Local Key",
+          "local_key": "From Tuya IoT Platform → Devices → Local Key",
           "poll_interval": "How often to poll the inverter (minimum 5 seconds)",
           "daytime_only": "Disable polling at night to avoid connection errors (recommended for systems without battery)"
         }
