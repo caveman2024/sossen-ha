@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "SOSSEN Microinverter",
-        "description": "Enter the connection details for your SOSSEN inverter.",
+        "description": "Enter the connection details for your SOSSEN inverter.\n\n⚠️ **The inverter must be producing solar energy** (it is completely off at night). After setup, allow 2-3 minutes before data starts appearing.",
         "data": {
           "device_ip": "Device IP Address",
           "device_id": "Device ID",

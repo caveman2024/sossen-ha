@@ -67,6 +67,10 @@ Potentially compatible with other SOSSEN microinverters using the Tuya v3.5 prot
 2. Restart Home Assistant
 3. Go to **Settings → Devices & Services → Add Integration** → search for "SOSSEN"
 
+## Important
+
+> **⚠️ The inverter is solar-powered only** — it has no standby power and is completely off when panels are not producing (night, heavy clouds). Configuration and first data reception can only happen during solar production hours. After connecting, allow **2-3 minutes** before data starts appearing.
+
 ## Configuration
 
 During setup you will be asked for:
