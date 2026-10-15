@@ -110,6 +110,8 @@ During setup you will be asked for:
 
 **Alternative**: [tuya-local-key](https://github.com/vineetchoudhary/tuya-local-key) extracts the Device IDs and Local Keys of all your devices in one go (thanks @velectris491 for the tip).
 
+> **Note**: Tuya's own support assistant may claim that the Local Key can no longer be retrieved. It still can — see also [this step-by-step guide](https://www.remcokersten.nl/posts/get-tuya-localkey/) (thanks @TheB1gG).
+
 > **⚠️ The Local Key changes every time the inverter is removed and re-added in the app.** If you re-paired it, fetch the key again and re-add the integration. A wrong key shows up in the log as *"Inverter session refused (Tuya error 914)"*.
 >
 > **Using the Home Power app?** Remove the inverter from Home Power first, then add it in Smart Life (a device can only be bound to one account).
