@@ -6,7 +6,7 @@ Direct communication over the **local network** via Tuya v3.5 protocol — no cl
 
 ## What it does
 
-This integration reads production data directly from the SOSSEN microinverter and exposes them as sensors in Home Assistant, updating every 10 seconds (configurable).
+This integration reads production data directly from the SOSSEN microinverter and exposes them as sensors in Home Assistant, refreshed every ~20 seconds from the inverter's own real-time data stream.
 
 ### Available sensors
 
@@ -35,8 +35,9 @@ Channel 3/4 sensors are created only for 4in1 models.
 
 | Sensor | Description |
 |--------|-------------|
-| Raw Data | Shows all raw register (DP) values as attributes (disabled by default) |
-| Parameter 4172 | Unknown register, exposed to help map it (function still unverified) |
+| Raw Data | Shows all raw register (DP) values as attributes (disabled by default — enable it from *Settings → Devices & Services → Entities*) |
+| Conversion Efficiency (lifetime) | Lifetime AC/DC energy ratio (%); a slow drop is an early sign of a degrading microinverter |
+| DC Energy (lifetime) | Lifetime energy taken from the panels, input side (kWh) |
 
 ## Supported models
 
@@ -107,17 +108,23 @@ During setup you will be asked for:
 3. Under **Devices** → **Link Tuya App Account** → scan the QR code from the Smart Life app
 4. Go to **Devices → All Devices** — you will find your inverter with its **Local Key**
 
+**Alternative**: [tuya-local-key](https://github.com/vineetchoudhary/tuya-local-key) extracts the Device IDs and Local Keys of all your devices in one go (thanks @velectris491 for the tip).
+
+> **⚠️ The Local Key changes every time the inverter is removed and re-added in the app.** If you re-paired it, fetch the key again and re-add the integration. A wrong key shows up in the log as *"Inverter session refused (Tuya error 914)"*.
+>
+> **Using the Home Power app?** Remove the inverter from Home Power first, then add it in Smart Life (a device can only be bound to one account).
+
 > **Tip**: It is recommended to configure a static IP for the inverter in your router, so it doesn't change on reboot.
 
 ## How it works
 
-The integration uses [TinyTuya](https://github.com/jasonacox/tinytuya) to communicate directly with the inverter over the local network. The Tuya v3.5 protocol is used with `updatedps()` commands to trigger a response from the inverter, which sends a proprietary Base64 payload containing all production data.
+The integration uses [TinyTuya](https://github.com/jasonacox/tinytuya) to communicate directly with the inverter over the local network. The integration keeps a Tuya v3.5 session open and puts the inverter into its real-time broadcast mode (the same thing the vendor app does when opened): the inverter then pushes a proprietary Base64 payload with all production data every ~5 seconds, and the integration re-arms the stream automatically whenever it goes quiet.
 
 The payload is decoded according to the SOSSEN format: 2-byte header + 6-byte records, where each record contains the register ID (DP) and its associated value.
 
 ### Important technical note
 
-The SOSSEN inverter accepts **only one connection** at a time. If you have other software connecting to the same inverter (e.g. Python scripts, tuya-local, etc.), you must disable them before using this integration.
+Keeping the Smart Life app open at the same time is fine. Other local software talking to the same inverter (Python scripts, tuya-local, another copy of this integration…) can interfere with the session, so disable it before using this integration.
 
 ## Recommended dashboard
 

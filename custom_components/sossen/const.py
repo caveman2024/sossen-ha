@@ -45,6 +45,12 @@ HEARTBEAT_EVERY = 9
 # retries the whole connect on its own, and that ladder is what has to be
 # disarmed (see _ensure_device), not this.
 SOCKET_TIMEOUT = 3
+# tinytuya's "Check device key or version" code: TCP was accepted but the
+# 3.5 session handshake failed — typically a wrong Local Key, though a
+# booting inverter can briefly do the same. Reported after this many
+# consecutive cycles (~3-4 min), well past the ~2 min boot time.
+ERR_HANDSHAKE_REFUSED = "914"
+HANDSHAKE_REFUSALS_WARN_AFTER = 12
 # With the library's retries disabled, a user-initiated write gets its own
 # attempts (reads are already retried by the coordinator across cycles).
 SET_LIMIT_ATTEMPTS = 3

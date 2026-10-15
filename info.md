@@ -11,7 +11,7 @@ Direct communication over the local network — no cloud, no delays.
 * **Power limit control** directly from HA (500 W up to the model maximum)
 * **Automatic on/off detection** from the network (battery systems producing at night are supported): when off, power drops to 0, unmeasurable values go unavailable, the energy counter is preserved
 * **Diagnostic sensor** with all raw register values
-* Updates every **10 seconds** (configurable)
+* **Real-time** updates (~20 seconds) from the inverter's own data stream
 * Compatible with HA **Energy Dashboard**
 * Available in **English, Italian, German and French**
 

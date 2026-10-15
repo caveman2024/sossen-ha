@@ -25,6 +25,8 @@ from .const import (
     DEFAULT_POLL_INTERVAL,
     DOMAIN,
     DP_SET_POWER_LIMIT,
+    ERR_HANDSHAKE_REFUSED,
+    HANDSHAKE_REFUSALS_WARN_AFTER,
     HEARTBEAT_EVERY,
     LISTEN_WINDOW,
     MAX_FAILED_POLLS,
@@ -100,6 +102,10 @@ class SossenCoordinator(DataUpdateCoordinator):
         # session (connect/handshake failed or socket dropped), as opposed to
         # a cycle that merely heard nothing while the stream re-arms.
         self._session_lost: bool = False
+        # tinytuya error code ("Err") that ended the last lost session, and
+        # how many cycles in a row ended with a refused handshake.
+        self._session_err: str | None = None
+        self._handshake_refusals: int = 0
         # The tinytuya Device shares one socket and session state: never let
         # two executor threads (poll vs. set-limit) touch it concurrently.
         self._device_lock = asyncio.Lock()
@@ -170,6 +176,7 @@ class SossenCoordinator(DataUpdateCoordinator):
         in 20s idle, then a steady 5.1s cadence within seconds of the arm.
         """
         self._session_lost = False
+        self._session_err = None
         try:
             device = self._ensure_device()
             now = time.monotonic()
@@ -180,9 +187,10 @@ class SossenCoordinator(DataUpdateCoordinator):
                 # nothing can be pushed, and the arm and the first receive
                 # would each re-pay the same failed 3.5 handshake — 6s a
                 # piece against a device that accepts TCP but stays mute.
-                if _tuya_failed(device.heartbeat(nowait=True)):
+                result = device.heartbeat(nowait=True)
+                if _tuya_failed(result):
                     _LOGGER.debug("No session (heartbeat), skipping cycle")
-                    self._session_lost = True
+                    self._mark_session_lost(result)
                     return None
                 self._last_heartbeat = now
             if now - self._last_push >= ARM_AFTER_SILENCE:
@@ -190,9 +198,10 @@ class SossenCoordinator(DataUpdateCoordinator):
                     "Push stream silent for %.0fs, re-arming (DP19=%s)",
                     now - self._last_push, ARM_DP19_VALUE,
                 )
-                if _tuya_failed(device.set_value(ARM_DP19_DP, ARM_DP19_VALUE, nowait=True)):
+                result = device.set_value(ARM_DP19_DP, ARM_DP19_VALUE, nowait=True)
+                if _tuya_failed(result):
                     _LOGGER.debug("No session (arm), skipping cycle")
-                    self._session_lost = True
+                    self._mark_session_lost(result)
                     return None
 
             latest: dict | None = None
@@ -207,7 +216,7 @@ class SossenCoordinator(DataUpdateCoordinator):
                     # port, or — against a device that resets on accept —
                     # thousands of reconnects inside the 8s window.
                     _LOGGER.debug("Listen aborted: %s", result.get("Error"))
-                    self._session_lost = True
+                    self._mark_session_lost(result)
                     break
                 if not result or "dps" not in result:
                     continue
@@ -221,8 +230,13 @@ class SossenCoordinator(DataUpdateCoordinator):
             return latest
         except Exception as err:
             _LOGGER.debug("_sync_listen exception: %s", err)
-            self._session_lost = True
+            self._mark_session_lost(None)
             return None
+
+    def _mark_session_lost(self, result: dict | None) -> None:
+        """Record that the listen cycle ended without a session, and why."""
+        self._session_lost = True
+        self._session_err = result.get("Err") if isinstance(result, dict) else None
 
     def _sync_read_power_limit(self) -> int | None:
         """Read the current power limit by querying DP 24 config."""
@@ -315,15 +329,32 @@ class SossenCoordinator(DataUpdateCoordinator):
         # a full listen cycle pays a connect for the heartbeat, one for the
         # arm and one for the first receive. Only after a lost session, not
         # after mere silence: 30-120s without frames is normal while the
-        # stream re-arms, and the inverter accepts a single connection, so
-        # probing every silent cycle would open a second socket next to the
-        # live session exactly while it needs to stay undisturbed.
+        # stream re-arms, and probing every silent cycle would open a second
+        # socket next to the live session exactly while it needs to stay
+        # undisturbed.
         if self._session_lost and not await self.hass.async_add_executor_job(
             self._sync_probe
         ):
             data = None
+            self._session_err = None
         else:
             data = await self._locked_job(self._sync_listen)
+
+        # A refused handshake is what a wrong Local Key looks like, but a
+        # booting inverter can refuse it too, so only a persistent run of
+        # them is reported — once per outage, at warning level, because at
+        # debug level a wrong key just reads as "reachable but not answering".
+        if data is None and self._session_err == ERR_HANDSHAKE_REFUSED:
+            self._handshake_refusals += 1
+            if self._handshake_refusals == HANDSHAKE_REFUSALS_WARN_AFTER:
+                _LOGGER.warning(
+                    "Inverter session refused (Tuya error %s) for %d cycles in "
+                    "a row: the Local Key is probably wrong (it changes every "
+                    "time the inverter is re-added in the app)",
+                    ERR_HANDSHAKE_REFUSED, self._handshake_refusals,
+                )
+        else:
+            self._handshake_refusals = 0
 
         if data is not None:
             self._failed_polls = 0
