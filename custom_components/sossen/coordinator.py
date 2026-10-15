@@ -32,6 +32,8 @@ from .const import (
     OFF_POLL_INTERVAL,
     RECONNECT_AFTER_FAILURES,
     SENSOR_DEFINITIONS,
+    SET_LIMIT_ATTEMPTS,
+    SOCKET_TIMEOUT,
     TUYA_DP_COMMAND,
     TUYA_PORT,
     WARMUP_POLLS,
@@ -39,6 +41,15 @@ from .const import (
 from .protocol import build_set_power_payload, decode_payload, decode_records
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _tuya_failed(result) -> bool:
+    """Return True if a tinytuya call reported a failure.
+
+    The library signals errors with a dict carrying an "Error" key rather
+    than by raising; a successful nowait call returns None.
+    """
+    return isinstance(result, dict) and bool(result.get("Error"))
 
 
 class SossenCoordinator(DataUpdateCoordinator):
@@ -85,6 +96,10 @@ class SossenCoordinator(DataUpdateCoordinator):
         # at setup.
         self._last_push: float = 0.0
         self._last_heartbeat: float = 0.0
+        # True when the last listen cycle ended because tinytuya reported no
+        # session (connect/handshake failed or socket dropped), as opposed to
+        # a cycle that merely heard nothing while the stream re-arms.
+        self._session_lost: bool = False
         # The tinytuya Device shares one socket and session state: never let
         # two executor threads (poll vs. set-limit) touch it concurrently.
         self._device_lock = asyncio.Lock()
@@ -100,7 +115,16 @@ class SossenCoordinator(DataUpdateCoordinator):
             self._device = tinytuya.Device(
                 self._device_id, self._device_ip, self._local_key, version=3.5
             )
-            self._device.set_socketTimeout(3)
+            self._device.set_socketTimeout(SOCKET_TIMEOUT)
+            # set_socketTimeout caps a single attempt, NOT the retry ladder:
+            # tinytuya reconnects 5 times with a 5s sleep between tries by
+            # default, so one heartbeat()/receive() against an unreachable
+            # inverter blocks 35s and a whole listen cycle 105s (measured).
+            # Retrying is this coordinator's job — it comes back every poll
+            # interval and counts silent cycles itself — so the library is
+            # told to fail on the first attempt instead of duplicating it.
+            self._device.set_socketRetryLimit(1)
+            self._device.set_socketRetryDelay(0)
             self._device.set_socketPersistent(True)
         return self._device
 
@@ -145,23 +169,46 @@ class SossenCoordinator(DataUpdateCoordinator):
         HEARTBEAT_EVERY to keep the session alive. Verified live: 0 frames
         in 20s idle, then a steady 5.1s cadence within seconds of the arm.
         """
+        self._session_lost = False
         try:
             device = self._ensure_device()
             now = time.monotonic()
             if now - self._last_heartbeat >= HEARTBEAT_EVERY:
-                device.heartbeat(nowait=True)
+                # A nowait call returns None when it went out, an error dict
+                # when the session could not be established. Bail on the
+                # latter: without a session there is nothing to arm and
+                # nothing can be pushed, and the arm and the first receive
+                # would each re-pay the same failed 3.5 handshake — 6s a
+                # piece against a device that accepts TCP but stays mute.
+                if _tuya_failed(device.heartbeat(nowait=True)):
+                    _LOGGER.debug("No session (heartbeat), skipping cycle")
+                    self._session_lost = True
+                    return None
                 self._last_heartbeat = now
             if now - self._last_push >= ARM_AFTER_SILENCE:
                 _LOGGER.debug(
                     "Push stream silent for %.0fs, re-arming (DP19=%s)",
                     now - self._last_push, ARM_DP19_VALUE,
                 )
-                device.set_value(ARM_DP19_DP, ARM_DP19_VALUE, nowait=True)
+                if _tuya_failed(device.set_value(ARM_DP19_DP, ARM_DP19_VALUE, nowait=True)):
+                    _LOGGER.debug("No session (arm), skipping cycle")
+                    self._session_lost = True
+                    return None
 
             latest: dict | None = None
             deadline = time.monotonic() + LISTEN_WINDOW
             while time.monotonic() < deadline:
                 result = device.receive()
+                if _tuya_failed(result):
+                    # tinytuya reports a dead session as an error dict, and
+                    # has already thrown the socket away. The deadline is
+                    # only consulted between receives, so carrying on here
+                    # pays another connect per iteration: 90s for a refused
+                    # port, or — against a device that resets on accept —
+                    # thousands of reconnects inside the 8s window.
+                    _LOGGER.debug("Listen aborted: %s", result.get("Error"))
+                    self._session_lost = True
+                    break
                 if not result or "dps" not in result:
                     continue
                 for _dp_key, val in result["dps"].items():
@@ -174,6 +221,7 @@ class SossenCoordinator(DataUpdateCoordinator):
             return latest
         except Exception as err:
             _LOGGER.debug("_sync_listen exception: %s", err)
+            self._session_lost = True
             return None
 
     def _sync_read_power_limit(self) -> int | None:
@@ -195,17 +243,22 @@ class SossenCoordinator(DataUpdateCoordinator):
 
     def _sync_set_power_limit(self, watts: int) -> bool:
         """Set the power limit (runs in executor thread)."""
-        try:
-            device = self._ensure_device()
-            payload = build_set_power_payload(watts)
-            result = device.set_value(TUYA_DP_COMMAND, payload)
-        except Exception as err:
-            _LOGGER.debug("_sync_set_power_limit exception: %s", err)
-            return False
-        # tinytuya returns an error dict on failure, not None
-        if result is None or (isinstance(result, dict) and result.get("Error")):
-            return False
-        return True
+        payload = build_set_power_payload(watts)
+        # The library retries nothing any more (see _ensure_device) and a
+        # silent poll simply comes round again next cycle, but a write the
+        # user asked for has no second chance, so it gets its own attempts.
+        for _ in range(SET_LIMIT_ATTEMPTS):
+            try:
+                device = self._ensure_device()
+                result = device.set_value(TUYA_DP_COMMAND, payload)
+            except Exception as err:
+                _LOGGER.debug("_sync_set_power_limit exception: %s", err)
+                result = None
+            # tinytuya returns an error dict on failure, not None
+            if result is None or _tuya_failed(result):
+                continue
+            return True
+        return False
 
     def _build_off_data(self) -> dict:
         """Build the data dict for a powered-off inverter.
@@ -256,7 +309,21 @@ class SossenCoordinator(DataUpdateCoordinator):
             self.update_interval = timedelta(seconds=self._poll_interval)
             # Fall through and try a real poll right away.
 
-        data = await self._locked_job(self._sync_listen)
+        # Once a cycle has lost its session, check the TCP port before
+        # talking protocol again: the probe answers in milliseconds when the
+        # inverter is powered and costs one timeout when it is not, whereas
+        # a full listen cycle pays a connect for the heartbeat, one for the
+        # arm and one for the first receive. Only after a lost session, not
+        # after mere silence: 30-120s without frames is normal while the
+        # stream re-arms, and the inverter accepts a single connection, so
+        # probing every silent cycle would open a second socket next to the
+        # live session exactly while it needs to stay undisturbed.
+        if self._session_lost and not await self.hass.async_add_executor_job(
+            self._sync_probe
+        ):
+            data = None
+        else:
+            data = await self._locked_job(self._sync_listen)
 
         if data is not None:
             self._failed_polls = 0

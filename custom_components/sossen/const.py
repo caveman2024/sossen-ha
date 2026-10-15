@@ -41,6 +41,13 @@ MODELS = {
 LISTEN_WINDOW = 8
 ARM_AFTER_SILENCE = 30
 HEARTBEAT_EVERY = 9
+# Per-attempt socket timeout. It caps ONE connect or one read — tinytuya
+# retries the whole connect on its own, and that ladder is what has to be
+# disarmed (see _ensure_device), not this.
+SOCKET_TIMEOUT = 3
+# With the library's retries disabled, a user-initiated write gets its own
+# attempts (reads are already retried by the coordinator across cycles).
+SET_LIMIT_ATTEMPTS = 3
 # The vendor-app "arm" that flips the inverter into 5s broadcast mode:
 # a CONTROL_NEW setting raw DP 19 = 0x0101010101 (base64 "AQEBAQE=").
 # Recovered by decrypting a capture of the SmartLife app's local Tuya 3.5

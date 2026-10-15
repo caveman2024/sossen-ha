@@ -35,12 +35,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = SossenCoordinator(hass, entry)
 
-    # This activates the periodic polling timer.
-    # _async_update_data returns None quickly if no data yet (not blocking).
-    await coordinator.async_config_entry_first_refresh()
-
     hass.data[DOMAIN][entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Deliberately not async_config_entry_first_refresh(): one cycle talks to
+    # the inverter, and there is nothing to wait for. An inverter that is off
+    # (night, no battery) is not an error here — the coordinator reports it as
+    # "off" rather than failing — so blocking on that first cycle only holds
+    # the entities back and makes HA log "Waiting for integrations to complete
+    # setup" for as long as the device stays quiet. The entities read None
+    # until the first frame lands, which is what they already do at night.
+    entry.async_create_background_task(
+        hass, coordinator.async_refresh(), f"{DOMAIN}-first-refresh"
+    )
 
     _LOGGER.info(
         "SOSSEN setup complete, polling every %ss",
