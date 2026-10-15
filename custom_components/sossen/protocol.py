@@ -108,10 +108,13 @@ def decode_payload(payload_b64: str) -> dict | None:
     # pure ratio (unit-independent); DC energy is anchored to the accurate AC
     # odometer (DP 4098) scaled by the counter ratio, so no magic kWh-per-unit
     # constant is baked in. Both are None when the counters are absent (older
-    # firmware / other models) so nothing shows a bogus 0.
+    # firmware / other models) so nothing shows a bogus 0. They are also None
+    # when AC exceeds DC: output can never exceed input, so the registers do
+    # not hold the energy counters (an early-2026 firmware reported 92/90
+    # there, which would read as 102% efficiency).
     ac_units = records.get(DP_ENERGY_AC_UNITS, 0)
     dc_units = records.get(DP_ENERGY_DC_UNITS, 0)
-    if ac_units and dc_units:
+    if ac_units and dc_units and ac_units <= dc_units:
         result["conversion_efficiency_lifetime"] = round(
             ac_units / dc_units * 100, 1
         )

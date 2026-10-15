@@ -100,6 +100,13 @@ def test_lifetime_efficiency_and_dc_energy():
     assert data["energy_dc_total_kwh"] == pytest.approx(1004.0 * 5140 / 4900, abs=0.05)
 
 
+def test_lifetime_values_discarded_when_ac_exceeds_dc():
+    """The early-2026 firmware held 92/90 there: not energy counters."""
+    data = decode_payload(b64(bytes.fromhex(REAL_FRAME_HEX)))
+    assert data["conversion_efficiency_lifetime"] is None
+    assert data["energy_dc_total_kwh"] is None
+
+
 def test_lifetime_values_absent_without_counters():
     data = decode_payload(frame({dp.DP_AC_VOLTAGE: 2300, dp.DP_ENERGY_TOTAL: 100}))
     assert data["conversion_efficiency_lifetime"] is None

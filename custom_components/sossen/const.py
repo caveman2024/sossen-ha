@@ -131,6 +131,8 @@ def build_device_info(entry) -> dict:
 #   unavailable -> nothing to measure, a value would be false data
 #   retain      -> odometer-style counter, must never drop to 0
 # "min_channels" hides channel 3/4 sensors on 2-channel models.
+# "restore" keeps the last value across HA restarts (the Energy dashboard
+# counter); not used for derived values a firmware may report wrongly.
 SENSOR_DEFINITIONS = [
     {
         "key": "dc_power_total_w",
@@ -261,6 +263,7 @@ SENSOR_DEFINITIONS = [
         "state_class": SensorStateClass.TOTAL_INCREASING,
         "icon": "mdi:solar-power-variant",
         "when_off": "retain",
+        "restore": True,
     },
     {
         "key": "temperature_c",

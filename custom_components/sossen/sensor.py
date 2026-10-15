@@ -1,6 +1,10 @@
 """Sensor platform for SOSSEN Microinverter."""
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import (
+    RestoreSensor,
+    SensorDeviceClass,
+    SensorEntity,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
@@ -30,7 +34,11 @@ async def async_setup_entry(
 
     channels = coordinator.model["channels"]
     entities: list[SensorEntity] = [
-        SossenSensor(coordinator, entry, sensor_def)
+        (
+            SossenRestoreSensor
+            if sensor_def.get("restore")
+            else SossenSensor
+        )(coordinator, entry, sensor_def)
         for sensor_def in SENSOR_DEFINITIONS
         if sensor_def.get("min_channels", 2) <= channels
     ]
@@ -82,6 +90,38 @@ class SossenSensor(CoordinatorEntity, SensorEntity):
         if not super().available or self.coordinator.data is None:
             return False
         return self.coordinator.data.get(self._key) is not None
+
+
+class SossenRestoreSensor(SossenSensor, RestoreSensor):
+    """Odometer-style sensor that keeps its last value across restarts.
+
+    Without this, the counter reads unavailable after a Home Assistant
+    restart until the first data frame lands — ~10s by day, but all night
+    when the inverter is powered off (no battery), since there is no
+    previous value for the coordinator to retain.
+    """
+
+    _last_value = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last known value."""
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_sensor_data()) is not None:
+            self._last_value = last.native_value
+
+    @property
+    def native_value(self):
+        """Return the live value, falling back to the last known one."""
+        value = super().native_value
+        if value is not None:
+            self._last_value = value
+            return value
+        return self._last_value
+
+    @property
+    def available(self) -> bool:
+        """Available while there is a live or a last known value."""
+        return super().available or self._last_value is not None
 
 
 class SossenStatusSensor(CoordinatorEntity, SensorEntity):
