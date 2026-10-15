@@ -2,7 +2,7 @@
 
 import base64
 
-from .const import (
+from .dp import (
     DP_AC_FREQUENCY,
     DP_AC_POWER,
     DP_AC_VOLTAGE,

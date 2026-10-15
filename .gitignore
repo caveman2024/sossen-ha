@@ -24,3 +24,6 @@ _sossen_dash.json
 
 # Logo source
 logo.webp
+
+# Test cache
+.pytest_cache/
