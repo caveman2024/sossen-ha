@@ -96,6 +96,10 @@ class SossenCoordinator(DataUpdateCoordinator):
         # at setup.
         self._last_push: float = 0.0
         self._last_heartbeat: float = 0.0
+        # True when the last listen cycle ended because tinytuya reported no
+        # session (connect/handshake failed or socket dropped), as opposed to
+        # a cycle that merely heard nothing while the stream re-arms.
+        self._session_lost: bool = False
         # The tinytuya Device shares one socket and session state: never let
         # two executor threads (poll vs. set-limit) touch it concurrently.
         self._device_lock = asyncio.Lock()
@@ -165,6 +169,7 @@ class SossenCoordinator(DataUpdateCoordinator):
         HEARTBEAT_EVERY to keep the session alive. Verified live: 0 frames
         in 20s idle, then a steady 5.1s cadence within seconds of the arm.
         """
+        self._session_lost = False
         try:
             device = self._ensure_device()
             now = time.monotonic()
@@ -177,6 +182,7 @@ class SossenCoordinator(DataUpdateCoordinator):
                 # piece against a device that accepts TCP but stays mute.
                 if _tuya_failed(device.heartbeat(nowait=True)):
                     _LOGGER.debug("No session (heartbeat), skipping cycle")
+                    self._session_lost = True
                     return None
                 self._last_heartbeat = now
             if now - self._last_push >= ARM_AFTER_SILENCE:
@@ -186,6 +192,7 @@ class SossenCoordinator(DataUpdateCoordinator):
                 )
                 if _tuya_failed(device.set_value(ARM_DP19_DP, ARM_DP19_VALUE, nowait=True)):
                     _LOGGER.debug("No session (arm), skipping cycle")
+                    self._session_lost = True
                     return None
 
             latest: dict | None = None
@@ -200,6 +207,7 @@ class SossenCoordinator(DataUpdateCoordinator):
                     # port, or — against a device that resets on accept —
                     # thousands of reconnects inside the 8s window.
                     _LOGGER.debug("Listen aborted: %s", result.get("Error"))
+                    self._session_lost = True
                     break
                 if not result or "dps" not in result:
                     continue
@@ -213,6 +221,7 @@ class SossenCoordinator(DataUpdateCoordinator):
             return latest
         except Exception as err:
             _LOGGER.debug("_sync_listen exception: %s", err)
+            self._session_lost = True
             return None
 
     def _sync_read_power_limit(self) -> int | None:
@@ -300,12 +309,16 @@ class SossenCoordinator(DataUpdateCoordinator):
             self.update_interval = timedelta(seconds=self._poll_interval)
             # Fall through and try a real poll right away.
 
-        # Once a cycle has come back silent, check the TCP port before
+        # Once a cycle has lost its session, check the TCP port before
         # talking protocol again: the probe answers in milliseconds when the
         # inverter is powered and costs one timeout when it is not, whereas
         # a full listen cycle pays a connect for the heartbeat, one for the
-        # arm and one for the first receive.
-        if self._failed_polls and not await self.hass.async_add_executor_job(
+        # arm and one for the first receive. Only after a lost session, not
+        # after mere silence: 30-120s without frames is normal while the
+        # stream re-arms, and the inverter accepts a single connection, so
+        # probing every silent cycle would open a second socket next to the
+        # live session exactly while it needs to stay undisturbed.
+        if self._session_lost and not await self.hass.async_add_executor_job(
             self._sync_probe
         ):
             data = None
