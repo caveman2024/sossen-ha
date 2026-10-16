@@ -58,6 +58,7 @@
     },
     "abort": {
       "already_configured": "Dieses Gerät ist bereits konfiguriert.",
+      "all_configured": "Alle Wechselrichter dieses Kontos sind bereits konfiguriert.",
       "cloud_error": "Die Geräte des Smart-Life-Kontos konnten nicht gelesen werden. Versuche es später erneut oder nutze die manuelle Einrichtung.",
       "no_inverters": "In diesem Smart-Life-Konto wurde kein SOSSEN-Wechselrichter gefunden."
     },

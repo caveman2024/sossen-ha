@@ -182,7 +182,7 @@ class SossenConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         }
         self._inverters = [i for i in result if i[CONF_DEVICE_ID] not in configured]
         if not self._inverters:
-            return self.async_abort(reason="already_configured")
+            return self.async_abort(reason="all_configured")
         return await self.async_step_pick()
 
     async def async_step_pick(self, user_input=None) -> ConfigFlowResult:

@@ -58,6 +58,7 @@
     },
     "abort": {
       "already_configured": "Cet appareil est déjà configuré.",
+      "all_configured": "Tous les onduleurs de ce compte sont déjà configurés.",
       "cloud_error": "Impossible de lire les appareils du compte Smart Life. Réessaie plus tard ou utilise la configuration manuelle.",
       "no_inverters": "Aucun onduleur SOSSEN trouvé dans ce compte Smart Life."
     },

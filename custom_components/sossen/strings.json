@@ -58,6 +58,7 @@
     },
     "abort": {
       "already_configured": "This device is already configured.",
+      "all_configured": "All the inverters of this account are already configured.",
       "cloud_error": "Could not read the devices of the Smart Life account. Try again later, or use the manual setup.",
       "no_inverters": "No SOSSEN inverter found in this Smart Life account."
     },
