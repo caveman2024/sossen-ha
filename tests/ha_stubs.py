@@ -53,8 +53,14 @@ class SensorEntity(Entity):
 
 
 class RestoreEntity(Entity):
+    # Tests set this to the State HA would have stored before the restart.
+    stored_state = None
+
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
+
+    async def async_get_last_state(self):
+        return self.stored_state
 
 
 class SensorExtraStoredData:

@@ -68,6 +68,28 @@ def test_last_live_value_kept_when_frame_lacks_energy():
     assert entity.native_value == 1281.0
 
 
+def test_first_start_after_upgrade_restores_from_last_state():
+    """Upgrading from a plain sensor: only the state string was stored."""
+    coordinator = SimpleNamespace(data=None, last_update_success=True)
+    entity = S.SossenRestoreSensor(coordinator, ENTRY, ENERGY_DEF)
+    entity.stored = None
+    entity.stored_state = SimpleNamespace(state="1280.6")
+    asyncio.run(entity.async_added_to_hass())
+
+    assert entity.available
+    assert entity.native_value == 1280.6
+
+
+def test_unavailable_last_state_is_not_restored():
+    coordinator = SimpleNamespace(data=None, last_update_success=True)
+    entity = S.SossenRestoreSensor(coordinator, ENTRY, ENERGY_DEF)
+    entity.stored = None
+    entity.stored_state = SimpleNamespace(state="unavailable")
+    asyncio.run(entity.async_added_to_hass())
+
+    assert not entity.available
+
+
 def test_nothing_stored_behaves_like_a_plain_sensor():
     coordinator, entity = restored_energy(None)
     entity.stored = None

@@ -276,7 +276,11 @@ SENSOR_DEFINITIONS = [
         "key": "energy_dc_total_kwh",
         "device_class": SensorDeviceClass.ENERGY,
         "unit": "kWh",
-        "state_class": SensorStateClass.TOTAL_INCREASING,
+        # TOTAL, not TOTAL_INCREASING: this is derived (AC odometer x the
+        # DC/AC counter ratio) and the two counters tick at different times,
+        # so it can dip by a few tenths; HA flags any dip of an increasing
+        # total as a bug.
+        "state_class": SensorStateClass.TOTAL,
         "when_off": "retain",
         "entity_category": EntityCategory.DIAGNOSTIC,
     },

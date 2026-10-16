@@ -108,6 +108,14 @@ class SossenRestoreSensor(SossenSensor, RestoreSensor):
         await super().async_added_to_hass()
         if (last := await self.async_get_last_sensor_data()) is not None:
             self._last_value = last.native_value
+        elif (state := await self.async_get_last_state()) is not None:
+            # First start after upgrading from a version where this was a
+            # plain sensor: no sensor extra data was stored yet, but the
+            # last state string was.
+            try:
+                self._last_value = float(state.state)
+            except ValueError:
+                pass  # "unavailable" / "unknown": nothing to restore
 
     @property
     def native_value(self):
