@@ -1,6 +1,6 @@
 # SOSSEN Microinverter - Home Assistant Integration
 
-Local integration for **SOSSEN 2in1** (600W / 800W / 1000W) and **SOSSEN 4in1** (2400W) — the **1in1** (500W) is reported working too — microinverters for Home Assistant.
+Local integration for **SOSSEN 2in1** (600W / 800W / 1000W) and **SOSSEN 4in1** (2400W) microinverters for Home Assistant (the **1in1**, 500W, is reported working too).
 
 Direct communication over the **local network** via Tuya v3.5 protocol — no cloud, no delays, no external servers.
 
