@@ -21,6 +21,9 @@ from .const import (
     ARM_AFTER_SILENCE,
     ARM_DP19_DP,
     ARM_DP19_VALUE,
+    DATA_LIMIT_COMMANDS,
+    DATA_POWER_LIMIT,
+    DATA_USER_LIMIT,
     DEFAULT_MODEL,
     DEFAULT_POLL_INTERVAL,
     DOMAIN,
@@ -33,6 +36,8 @@ from .const import (
     MODELS,
     OFF_POLL_INTERVAL,
     RECONNECT_AFTER_FAILURES,
+    REDISCOVER_EVERY_OFF_PROBES,
+    REDISCOVER_TIMEOUT,
     SENSOR_DEFINITIONS,
     SET_LIMIT_ATTEMPTS,
     SOCKET_TIMEOUT,
@@ -40,6 +45,7 @@ from .const import (
     TUYA_PORT,
     WARMUP_POLLS,
 )
+from .discovery import async_locate
 from .protocol import build_set_power_payload, decode_payload, decode_records
 
 _LOGGER = logging.getLogger(__name__)
@@ -81,9 +87,11 @@ class SossenCoordinator(DataUpdateCoordinator):
         model_key = entry.data.get(CONF_MODEL, DEFAULT_MODEL)
         self.model = MODELS.get(model_key, MODELS[DEFAULT_MODEL])
         self._power_limit: int | None = entry.data.get(
-            "power_limit_last", self.model["power_limit_max"]
+            DATA_POWER_LIMIT, self.model["power_limit_max"]
         )
-        self._limit_read_pending: bool = entry.data.get("power_limit_last") is None
+        self._limit_read_pending: bool = entry.data.get(DATA_POWER_LIMIT) is None
+        # Powered-off probes since the last search for a new address.
+        self._off_probes: int = 0
         self._limit_read_attempts: int = 3
         self._failed_polls: int = 0
         # Grace period at HA start too: the device may still be warming up.
@@ -307,13 +315,43 @@ class SossenCoordinator(DataUpdateCoordinator):
             self.is_powered_off = True
             self.update_interval = timedelta(seconds=OFF_POLL_INTERVAL)
 
+    async def _async_rediscover(self) -> bool:
+        """Look for the inverter at a new LAN address; True if it moved there.
+
+        Broadcasts only (no subnet sweep in the background). A powered-off
+        inverter simply is not heard, which costs REDISCOVER_TIMEOUT seconds
+        every few off-probes.
+        """
+        found = (
+            await async_locate(
+                self.hass, {self._device_id: self._local_key}, REDISCOVER_TIMEOUT
+            )
+        ).get(self._device_id)
+        if not found or found == self._device_ip:
+            return False
+        _LOGGER.info("Inverter moved from %s to %s", self._device_ip, found)
+        await self._locked_job(self._disconnect)
+        self._device_ip = found
+        self.hass.config_entries.async_update_entry(
+            self.entry, data={**self.entry.data, CONF_DEVICE_IP: found}
+        )
+        return await self.hass.async_add_executor_job(self._sync_probe)
+
     async def _async_update_data(self) -> dict:
         """Fetch data from the inverter, deducing on/off from the network."""
         if self.is_powered_off:
             # Only a light TCP probe while off — no full protocol attempts.
             if not await self.hass.async_add_executor_job(self._sync_probe):
-                return self._build_off_data()
+                # Unreachable may also mean it moved (DHCP): now and then,
+                # listen for its broadcast at a new address.
+                self._off_probes += 1
+                if self._off_probes < REDISCOVER_EVERY_OFF_PROBES:
+                    return self._build_off_data()
+                self._off_probes = 0
+                if not await self._async_rediscover():
+                    return self._build_off_data()
             _LOGGER.info("Inverter powered back on, resuming polling")
+            self._off_probes = 0
             self.is_powered_off = False
             self._failed_polls = 0
             self._reconnect_grace_used = False
@@ -427,17 +465,48 @@ class SossenCoordinator(DataUpdateCoordinator):
         self._enter_powered_off()
         return self._build_off_data()
 
-    async def async_set_power_limit(self, watts: int) -> None:
-        """Set the inverter power limit."""
+    async def async_set_power_limit(self, watts: int, by_user: bool = True) -> bool:
+        """Set the inverter power limit.
+
+        by_user=False is the overvoltage protection acting: the limit the
+        user chose is kept apart, as the ceiling it raises back to.
+        """
         success = await self._locked_job(self._sync_set_power_limit, watts)
-        if success:
-            self._power_limit = watts
-            # Persist last set value so it survives restarts
-            new_data = {**self.entry.data, "power_limit_last": watts}
-            self.hass.config_entries.async_update_entry(self.entry, data=new_data)
-            _LOGGER.info("Power limit set to %dW", watts)
-        else:
+        if not success:
             _LOGGER.error("Failed to set power limit to %dW", watts)
+            return False
+        self._power_limit = watts
+        # The command reply interrupts the pushed stream (~20s gap measured
+        # after each command): re-arm on the next cycle instead of waiting
+        # ARM_AFTER_SILENCE. Idea from ritonbrunis-lab/sossen-direct (MIT).
+        self._last_push = 0.0
+        # Persist so it survives restarts, and count the commands: each one
+        # may be written to the inverter's flash, of unknown endurance.
+        new_data = {
+            **self.entry.data,
+            DATA_POWER_LIMIT: watts,
+            DATA_LIMIT_COMMANDS: self.limit_commands + 1,
+        }
+        if by_user:
+            new_data[DATA_USER_LIMIT] = watts
+        self.hass.config_entries.async_update_entry(self.entry, data=new_data)
+        _LOGGER.info(
+            "Power limit set to %dW%s", watts, "" if by_user else " (overvoltage protection)"
+        )
+        self.async_update_listeners()
+        return True
+
+    @property
+    def limit_commands(self) -> int:
+        """Power-limit commands sent to this inverter since setup."""
+        return self.entry.data.get(DATA_LIMIT_COMMANDS, 0)
+
+    @property
+    def user_limit(self) -> int:
+        """The limit the user chose (the protection's ceiling)."""
+        return self.entry.data.get(
+            DATA_USER_LIMIT, self._power_limit or self.model["power_limit_max"]
+        )
 
     async def async_shutdown(self) -> None:
         """Disconnect on shutdown."""

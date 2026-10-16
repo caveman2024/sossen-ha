@@ -3,7 +3,37 @@
     "step": {
       "user": {
         "title": "SOSSEN Microinverter",
-        "description": "Enter the connection details for your SOSSEN inverter.\n\n⚠️ **The inverter must be powered during setup** (producing from sun or battery) — it switches off completely when it has no power source. After setup, allow 2-3 minutes before data starts appearing.",
+        "description": "How do you want to set up your inverter?\n\n⚠️ **The inverter must be powered during setup** (producing from sun or battery). Allow 2-3 minutes after setup before data appears.",
+        "menu_options": {
+          "smart_life": "Smart Life login (recommended: no key or IP to type)",
+          "manual": "Manual (Device ID and Local Key)"
+        }
+      },
+      "smart_life": {
+        "title": "Smart Life login",
+        "description": "Enter your **user code** from the Smart Life (or Home Power) app: **Me → ⚙️ Settings → Account and Security → User Code**. The app is used only now, to read your inverters and their keys: afterwards everything stays on your local network.\n\n{msg}",
+        "data": {
+          "user_code": "User code"
+        }
+      },
+      "scan": {
+        "title": "Scan the QR code",
+        "description": "In the Smart Life app, tap the scan icon (top right of the home screen), scan this code and confirm the login. Then press **Submit**."
+      },
+      "pick": {
+        "title": "Inverters found",
+        "description": "{count} SOSSEN inverter(s) found in your account. Choose the ones to add.",
+        "data": {
+          "inverters": "Inverters"
+        }
+      },
+      "addresses": {
+        "title": "Inverter not found on the network",
+        "description": "Not found: **{names}**. Make sure it is powered and on the same network as Home Assistant, then enter its IP address (see your router's DHCP list)."
+      },
+      "manual": {
+        "title": "Manual setup",
+        "description": "Enter the details of your SOSSEN inverter.\n\n⚠️ **The inverter must be powered during setup** (producing from sun or battery). Allow 2-3 minutes after setup before data appears.",
         "data": {
           "model": "Inverter model",
           "device_ip": "Device IP Address",
@@ -13,7 +43,7 @@
         },
         "data_description": {
           "model": "Family of your inverter: number of panel inputs and maximum power",
-          "device_ip": "Local IP of the inverter (e.g. 192.168.1.x)",
+          "device_ip": "Leave empty to find it on the network automatically",
           "device_id": "Smart Life app → Settings → Device Information → Device ID",
           "local_key": "From Tuya IoT Platform → Devices → Local Key",
           "poll_interval": "How often to poll the inverter (minimum 5 seconds)"
@@ -21,10 +51,18 @@
       }
     },
     "error": {
-      "cannot_connect": "Cannot connect to the inverter. Check IP, Device ID and Local Key."
+      "cannot_connect": "Cannot connect to the inverter. Check IP, Device ID and Local Key.",
+      "login_error": "The Smart Life login failed: check the user code. {msg}",
+      "scan_error": "The QR code has not been scanned (or has expired): scan the new one, then press Submit.",
+      "not_found": "Enter the IP address of each inverter listed."
     },
     "abort": {
-      "already_configured": "This device is already configured."
+      "already_configured": "This device is already configured.",
+      "cloud_error": "Could not read the devices of the Smart Life account. Try again later, or use the manual setup.",
+      "no_inverters": "No SOSSEN inverter found in this Smart Life account."
+    },
+    "progress": {
+      "locate": "Looking for the inverters on your network (up to {seconds} s)…"
     }
   },
   "selector": {
@@ -107,12 +145,40 @@
       },
       "raw": {
         "name": "Raw Data"
+      },
+      "limit_commands": {
+        "name": "Power Limit Commands"
       }
     },
     "number": {
       "power_limit": {
         "name": "Power Limit"
       }
+    },
+    "switch": {
+      "overvoltage_protection": {
+        "name": "Overvoltage Protection"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Overvoltage protection",
+        "description": "The inverter disconnects from the grid around 253 V, and its own production raises the voltage it sees. When enabled, every interval: at or above the high threshold the power limit goes down one step, at or below the low threshold it goes back up one (smaller) step, never above the limit you chose. Each change is a command sent to the inverter.",
+        "data": {
+          "protection": "Enable overvoltage protection",
+          "high_voltage": "High threshold (lower the limit)",
+          "low_voltage": "Low threshold (raise the limit again)",
+          "step_down": "Step down",
+          "step_up": "Step up",
+          "min_limit": "Lowest limit",
+          "interval": "Check interval"
+        }
+      }
+    },
+    "error": {
+      "low_above_high": "The low threshold must be below the high threshold."
     }
   }
 }

@@ -169,3 +169,72 @@ def test_data_resets_failure_counters(make_coordinator, mute_inverter):
     assert run_cycles(coord, 1) is frame
     assert coord._failed_polls == 0
     assert coord._handshake_refusals == 0
+
+
+class FakeEntries:
+    def async_update_entry(self, entry, data=None, options=None):
+        if data is not None:
+            entry.data = data
+
+
+def coordinator_with_entries(make_coordinator, port):
+    coord = make_coordinator(port)
+    coord.entry = type("E", (), {"data": dict(FakeEntry.data), "options": {}})()
+    coord.hass.config_entries = FakeEntries()
+    return coord
+
+
+def test_limit_command_rearms_stream_counts_and_tracks_user_limit(
+    make_coordinator, closed_port
+):
+    coord = coordinator_with_entries(make_coordinator, closed_port)
+    coord._sync_set_power_limit = lambda watts: True
+    coord._last_push = 12345.0
+
+    assert asyncio.run(coord.async_set_power_limit(600))
+    # The command reply interrupts the push stream: re-arm next cycle.
+    assert coord._last_push == 0.0
+    assert coord.power_limit == 600 and coord.user_limit == 600
+    assert coord.limit_commands == 1
+
+    # The protection lowering it keeps the user's choice as the ceiling.
+    assert asyncio.run(coord.async_set_power_limit(530, by_user=False))
+    assert coord.power_limit == 530 and coord.user_limit == 600
+    assert coord.limit_commands == 2
+
+
+def test_failed_limit_command_changes_nothing(make_coordinator, closed_port):
+    coord = coordinator_with_entries(make_coordinator, closed_port)
+    coord._sync_set_power_limit = lambda watts: False
+
+    assert not asyncio.run(coord.async_set_power_limit(600))
+    assert coord.limit_commands == 0
+
+
+def test_unreachable_inverter_is_looked_for_at_a_new_address(
+    make_coordinator, closed_port, mute_inverter, monkeypatch
+):
+    """DHCP moved it: the off-probe finds it by broadcast and follows it."""
+    coord = coordinator_with_entries(make_coordinator, closed_port)
+    coord.is_powered_off = True
+    probes = {"n": 0}
+
+    def probe():
+        probes["n"] += 1
+        return coord._device_ip == "10.9.9.9"
+
+    coord._sync_probe = probe
+
+    async def locate(hass, keys, timeout, sweep=False):
+        return {next(iter(keys)): "10.9.9.9"}
+
+    monkeypatch.setattr(C, "async_locate", locate)
+    monkeypatch.setattr(C, "REDISCOVER_EVERY_OFF_PROBES", 2)
+    coord._sync_listen = lambda: None
+
+    run_cycles(coord, 1)
+    assert coord.is_powered_off  # first off-probe: no search yet
+    run_cycles(coord, 1)
+    assert not coord.is_powered_off
+    assert coord._device_ip == "10.9.9.9"
+    assert coord.entry.data["device_ip"] == "10.9.9.9"

@@ -6,6 +6,9 @@ Direct communication over the local network — no cloud, no delays.
 
 ## Features
 
+* **Smart Life login**: set up with a QR code, no Local Key or IP to look up (the account is used only during setup)
+* **Automatic LAN discovery**, also when the inverter's IP changes
+* **Overvoltage protection** (optional): lowers the power limit before the grid voltage trips the inverter
 * Real-time solar production sensors (power, voltage, current, frequency, temperature, energy) — per-panel channels included
 * **Inverter status** with 3 states: producing, alarm, off
 * **Power limit control** directly from HA (0 W up to the model maximum)

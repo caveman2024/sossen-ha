@@ -44,6 +44,7 @@ async def async_setup_entry(
     ]
     entities.append(SossenStatusSensor(coordinator, entry))
     entities.append(SossenRawSensor(coordinator, entry))
+    entities.append(SossenLimitCommandsSensor(coordinator, entry))
     async_add_entities(entities)
 
 
@@ -170,6 +171,33 @@ class SossenStatusSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return None
         return {"status_raw": self.coordinator.data.get("status", 0)}
+
+
+class SossenLimitCommandsSensor(CoordinatorEntity, SensorEntity):
+    """Power-limit commands sent since setup (user and protection).
+
+    Each may be written to the inverter's flash, whose endurance is not
+    known: this makes an automation changing the limit too often visible.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "limit_commands"
+    _attr_icon = "mdi:counter"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: SossenCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.data[CONF_DEVICE_ID]}_limit_commands"
+        self._attr_device_info = build_device_info(entry)
+
+    @property
+    def available(self) -> bool:
+        """A counter kept in the config entry: always available."""
+        return True
+
+    @property
+    def native_value(self) -> int:
+        return self.coordinator.limit_commands
 
 
 class SossenRawSensor(CoordinatorEntity, SensorEntity):

@@ -1,11 +1,19 @@
 {
   "domain": "sossen",
   "name": "SOSSEN Microinverter",
-  "codeowners": ["@caveman2024"],
+  "codeowners": [
+    "@caveman2024"
+  ],
   "config_flow": true,
+  "dependencies": [
+    "network"
+  ],
   "documentation": "https://github.com/caveman2024/sossen-ha",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/caveman2024/sossen-ha/issues",
-  "requirements": ["tinytuya>=1.15.0"],
-  "version": "1.5.2"
+  "requirements": [
+    "tinytuya>=1.15.0",
+    "tuya-device-sharing-sdk>=0.2.1"
+  ],
+  "version": "1.6.0"
 }

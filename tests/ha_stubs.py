@@ -27,6 +27,9 @@ class DataUpdateCoordinator:
     async def async_shutdown(self):
         pass
 
+    def async_update_listeners(self):
+        self.listener_updates = getattr(self, "listener_updates", 0) + 1
+
 
 class UpdateFailed(Exception):
     pass
@@ -85,8 +88,32 @@ def _module(name, **attrs):
 
 
 _module("homeassistant")
-_module("homeassistant.core", HomeAssistant=object)
-_module("homeassistant.config_entries", ConfigEntry=object)
+_module(
+    "homeassistant.core",
+    HomeAssistant=object,
+    CALLBACK_TYPE=object,
+    callback=lambda func: func,
+)
+class ConfigFlow:
+    def __init_subclass__(cls, **kwargs):  # accepts domain=...
+        super().__init_subclass__()
+
+
+class OptionsFlow:
+    pass
+
+
+_module(
+    "homeassistant.config_entries",
+    ConfigEntry=object,
+    ConfigFlow=ConfigFlow,
+    OptionsFlow=OptionsFlow,
+    ConfigFlowResult=dict,
+    SOURCE_IMPORT="import",
+)
+# homeassistant.config_entries is also imported as "from homeassistant import
+# config_entries": expose it on the package too.
+sys.modules["homeassistant"].config_entries = sys.modules["homeassistant.config_entries"]
 _module("homeassistant.const", Platform=_Names())
 _module("homeassistant.components")
 _module(
@@ -99,6 +126,37 @@ _module(
 _module("homeassistant.helpers")
 _module("homeassistant.helpers.entity", EntityCategory=_Names(), Entity=Entity)
 _module("homeassistant.helpers.entity_platform", AddEntitiesCallback=object)
+
+class _Anything:
+    """Callable, and every attribute is itself: SelectSelectorMode.DROPDOWN."""
+
+    def __call__(self, *args, **kwargs):
+        return self
+
+    def __getattr__(self, name):
+        return self
+
+
+# Selectors only describe forms; the tests never render one.
+_selector = _module("homeassistant.helpers.selector")
+_selector.__getattr__ = lambda name: _Anything()
+sys.modules["homeassistant.helpers"].selector = _selector
+
+
+def async_track_time_interval(hass, action, interval):
+    """Record the timer instead of scheduling it; return its unsubscribe."""
+    timers = hass.__dict__.setdefault("timers", [])
+    timers.append((action, interval))
+    return lambda: timers.remove((action, interval))
+
+
+def async_redact_data(data, to_redact):
+    return {k: ("**REDACTED**" if k in to_redact else v) for k, v in data.items()}
+
+
+_module("homeassistant.helpers.event", async_track_time_interval=async_track_time_interval)
+_module("homeassistant.components.diagnostics", async_redact_data=async_redact_data)
+_module("homeassistant.components.switch", SwitchEntity=Entity)
 _module(
     "homeassistant.helpers.update_coordinator",
     DataUpdateCoordinator=DataUpdateCoordinator,

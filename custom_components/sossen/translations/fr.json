@@ -2,8 +2,38 @@
   "config": {
     "step": {
       "user": {
-        "title": "Micro-onduleur SOSSEN",
-        "description": "Saisissez les informations de connexion de votre onduleur SOSSEN.\n\n⚠️ **L'onduleur doit être alimenté pendant la configuration** (production solaire ou batterie) — il s'éteint complètement lorsqu'il n'a aucune source d'énergie. Après la configuration, patientez 2 à 3 minutes avant que les données n'apparaissent.",
+        "title": "SOSSEN Microinverter",
+        "description": "Comment veux-tu configurer ton onduleur ?\n\n⚠️ **L'onduleur doit être alimenté pendant la configuration** (en production grâce au soleil ou à une batterie). Après la configuration, compte 2 à 3 minutes avant l'arrivée des données.",
+        "menu_options": {
+          "smart_life": "Connexion Smart Life (recommandé : aucune clé ni IP à saisir)",
+          "manual": "Manuelle (Device ID et Local Key)"
+        }
+      },
+      "smart_life": {
+        "title": "Connexion Smart Life",
+        "description": "Saisis ton **code utilisateur** de l'app Smart Life (ou Home Power) : **Moi → ⚙️ Paramètres → Compte et sécurité → Code utilisateur**. L'app ne sert que maintenant, pour lire tes onduleurs et leurs clés : ensuite tout reste sur ton réseau local.\n\n{msg}",
+        "data": {
+          "user_code": "Code utilisateur"
+        }
+      },
+      "scan": {
+        "title": "Scanne le QR code",
+        "description": "Dans l'app Smart Life, touche l'icône de scan (en haut à droite de l'écran d'accueil), scanne ce code et confirme la connexion. Appuie ensuite sur **Valider**."
+      },
+      "pick": {
+        "title": "Onduleurs trouvés",
+        "description": "{count} onduleur(s) SOSSEN trouvé(s) dans ton compte. Choisis ceux à ajouter.",
+        "data": {
+          "inverters": "Onduleurs"
+        }
+      },
+      "addresses": {
+        "title": "Onduleur introuvable sur le réseau",
+        "description": "Introuvable : **{names}**. Vérifie qu'il est alimenté et sur le même réseau que Home Assistant, puis saisis son adresse IP (voir la liste DHCP de ta box)."
+      },
+      "manual": {
+        "title": "Configuration manuelle",
+        "description": "Saisis les informations de ton onduleur SOSSEN.\n\n⚠️ **L'onduleur doit être alimenté pendant la configuration** (en production grâce au soleil ou à une batterie). Après la configuration, compte 2 à 3 minutes avant l'arrivée des données.",
         "data": {
           "model": "Modèle d'onduleur",
           "device_ip": "Adresse IP de l'appareil",
@@ -13,7 +43,7 @@
         },
         "data_description": {
           "model": "Famille de votre onduleur : nombre d'entrées panneau et puissance maximale",
-          "device_ip": "IP locale de l'onduleur (ex. 192.168.1.x)",
+          "device_ip": "Laisse vide pour le trouver automatiquement sur le réseau",
           "device_id": "App Smart Life → Réglages → Informations sur l'appareil → ID de l'appareil",
           "local_key": "Depuis Tuya IoT Platform → Appareils → Clé locale",
           "poll_interval": "Fréquence d'interrogation de l'onduleur (minimum 5 secondes)"
@@ -21,10 +51,18 @@
       }
     },
     "error": {
-      "cannot_connect": "Impossible de se connecter à l'onduleur. Vérifiez l'IP, l'ID de l'appareil et la clé locale."
+      "cannot_connect": "Impossible de se connecter à l'onduleur. Vérifiez l'IP, l'ID de l'appareil et la clé locale.",
+      "login_error": "La connexion Smart Life a échoué : vérifie le code utilisateur. {msg}",
+      "scan_error": "Le QR code n'a pas été scanné (ou a expiré) : scanne le nouveau, puis appuie sur Valider.",
+      "not_found": "Saisis l'adresse IP de chaque onduleur listé."
     },
     "abort": {
-      "already_configured": "Cet appareil est déjà configuré."
+      "already_configured": "Cet appareil est déjà configuré.",
+      "cloud_error": "Impossible de lire les appareils du compte Smart Life. Réessaie plus tard ou utilise la configuration manuelle.",
+      "no_inverters": "Aucun onduleur SOSSEN trouvé dans ce compte Smart Life."
+    },
+    "progress": {
+      "locate": "Recherche des onduleurs sur le réseau (jusqu'à {seconds} s)…"
     }
   },
   "selector": {
@@ -107,12 +145,40 @@
       },
       "raw": {
         "name": "Données brutes"
+      },
+      "limit_commands": {
+        "name": "Commandes de limite de puissance"
       }
     },
     "number": {
       "power_limit": {
         "name": "Limite de puissance"
       }
+    },
+    "switch": {
+      "overvoltage_protection": {
+        "name": "Protection anti-surtension"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Protection anti-surtension",
+        "description": "L'onduleur se déconnecte du réseau vers 253 V, et sa propre production fait monter la tension qu'il mesure. Si elle est activée, à chaque intervalle : au seuil haut ou au-dessus, la limite de puissance baisse d'un pas ; au seuil bas ou en dessous, elle remonte d'un pas (plus petit), jamais au-delà de la limite que tu as choisie. Chaque changement est une commande envoyée à l'onduleur.",
+        "data": {
+          "protection": "Activer la protection anti-surtension",
+          "high_voltage": "Seuil haut (baisser la limite)",
+          "low_voltage": "Seuil bas (remonter la limite)",
+          "step_down": "Pas de baisse",
+          "step_up": "Pas de remontée",
+          "min_limit": "Limite la plus basse",
+          "interval": "Intervalle de contrôle"
+        }
+      }
+    },
+    "error": {
+      "low_above_high": "Le seuil bas doit être inférieur au seuil haut."
     }
   }
 }

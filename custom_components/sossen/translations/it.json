@@ -3,7 +3,37 @@
     "step": {
       "user": {
         "title": "SOSSEN Microinverter",
-        "description": "Inserisci i dati di connessione del tuo inverter SOSSEN.\n\n⚠️ **L'inverter deve essere alimentato durante la configurazione** (in produzione da sole o batteria) — si spegne completamente quando non ha alcuna fonte di energia. Dopo la configurazione, attendere 2-3 minuti prima che i dati inizino ad apparire.",
+        "description": "Come vuoi configurare il tuo inverter?\n\n⚠️ **L'inverter deve essere alimentato durante la configurazione** (in produzione da sole o batteria). Dopo la configurazione attendi 2-3 minuti prima che compaiano i dati.",
+        "menu_options": {
+          "smart_life": "Login Smart Life (consigliato: nessuna chiave o IP da inserire)",
+          "manual": "Manuale (Device ID e Local Key)"
+        }
+      },
+      "smart_life": {
+        "title": "Login Smart Life",
+        "description": "Inserisci il tuo **codice utente** dell'app Smart Life (o Home Power): **Io → ⚙️ Impostazioni → Account e sicurezza → Codice utente**. L'app serve solo ora, per leggere i tuoi inverter e le loro chiavi: dopo tutto resta sulla tua rete locale.\n\n{msg}",
+        "data": {
+          "user_code": "Codice utente"
+        }
+      },
+      "scan": {
+        "title": "Scansiona il QR code",
+        "description": "Nell'app Smart Life tocca l'icona di scansione (in alto a destra nella schermata principale), scansiona questo codice e conferma l'accesso. Poi premi **Invia**."
+      },
+      "pick": {
+        "title": "Inverter trovati",
+        "description": "Trovati {count} inverter SOSSEN nel tuo account. Scegli quelli da aggiungere.",
+        "data": {
+          "inverters": "Inverter"
+        }
+      },
+      "addresses": {
+        "title": "Inverter non trovato sulla rete",
+        "description": "Non trovato: **{names}**. Verifica che sia alimentato e sulla stessa rete di Home Assistant, poi inserisci il suo indirizzo IP (lo trovi nell'elenco DHCP del router)."
+      },
+      "manual": {
+        "title": "Configurazione manuale",
+        "description": "Inserisci i dati del tuo inverter SOSSEN.\n\n⚠️ **L'inverter deve essere alimentato durante la configurazione** (in produzione da sole o batteria). Dopo la configurazione attendi 2-3 minuti prima che compaiano i dati.",
         "data": {
           "model": "Modello inverter",
           "device_ip": "Indirizzo IP",
@@ -13,7 +43,7 @@
         },
         "data_description": {
           "model": "Famiglia del tuo inverter: numero di ingressi pannello e potenza massima",
-          "device_ip": "IP locale dell'inverter (es. 192.168.1.x)",
+          "device_ip": "Lascia vuoto per trovarlo automaticamente sulla rete",
           "device_id": "App Smart Life → Impostazioni → Informazioni sul dispositivo → Device ID",
           "local_key": "Da Tuya IoT Platform → Dispositivi → Local Key",
           "poll_interval": "Ogni quanti secondi interrogare l'inverter (minimo 5)"
@@ -21,10 +51,18 @@
       }
     },
     "error": {
-      "cannot_connect": "Impossibile connettersi all'inverter. Controlla IP, Device ID e Local Key."
+      "cannot_connect": "Impossibile connettersi all'inverter. Controlla IP, Device ID e Local Key.",
+      "login_error": "Login Smart Life non riuscito: controlla il codice utente. {msg}",
+      "scan_error": "Il QR code non è stato scansionato (o è scaduto): scansiona quello nuovo, poi premi Invia.",
+      "not_found": "Inserisci l'indirizzo IP di ogni inverter elencato."
     },
     "abort": {
-      "already_configured": "Questo dispositivo è già configurato."
+      "already_configured": "Questo dispositivo è già configurato.",
+      "cloud_error": "Impossibile leggere i dispositivi dell'account Smart Life. Riprova più tardi o usa la configurazione manuale.",
+      "no_inverters": "Nessun inverter SOSSEN trovato in questo account Smart Life."
+    },
+    "progress": {
+      "locate": "Ricerca degli inverter sulla rete (fino a {seconds} s)…"
     }
   },
   "selector": {
@@ -107,12 +145,40 @@
       },
       "raw": {
         "name": "Dati Grezzi"
+      },
+      "limit_commands": {
+        "name": "Comandi Limite Potenza"
       }
     },
     "number": {
       "power_limit": {
         "name": "Limite Potenza"
       }
+    },
+    "switch": {
+      "overvoltage_protection": {
+        "name": "Protezione Sovratensione"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Protezione da sovratensione",
+        "description": "L'inverter si scollega dalla rete intorno ai 253 V, e la sua stessa produzione alza la tensione che misura. Se attiva, a ogni intervallo: alla soglia alta o sopra il limite di potenza scende di un passo, alla soglia bassa o sotto risale di un passo (più piccolo), mai oltre il limite che hai scelto tu. Ogni cambio è un comando inviato all'inverter.",
+        "data": {
+          "protection": "Attiva la protezione da sovratensione",
+          "high_voltage": "Soglia alta (abbassa il limite)",
+          "low_voltage": "Soglia bassa (rialza il limite)",
+          "step_down": "Passo in discesa",
+          "step_up": "Passo in salita",
+          "min_limit": "Limite minimo",
+          "interval": "Intervallo di controllo"
+        }
+      }
+    },
+    "error": {
+      "low_above_high": "La soglia bassa deve essere inferiore alla soglia alta."
     }
   }
 }

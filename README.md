@@ -30,6 +30,7 @@ Channel 3/4 sensors are created only for 4in1 models.
 | Control | Description |
 |---------|-------------|
 | Power Limit | Set the output power limit (0 W up to the model maximum) |
+| Overvoltage Protection | Lowers the power limit automatically when the grid voltage gets close to the inverter's trip point (off by default — see below) |
 
 > **About the power limit**: the inverter does not jump to a new limit, it ramps towards it. Going down takes about 1–2 minutes to get close (a few minutes more for the last watts near 0 W), going back up about 1–2 minutes. The output may settle somewhat below the limit. Keep this in mind when driving the limit from an automation (e.g. zero-export): change it at most every couple of minutes, or the automation will chase its own ramp.
 
@@ -40,6 +41,19 @@ Channel 3/4 sensors are created only for 4in1 models.
 | Raw Data | Shows all raw register (DP) values as attributes (disabled by default — enable it from *Settings → Devices & Services → Entities*) |
 | Conversion Efficiency (lifetime) | Lifetime AC/DC energy ratio (%); a slow drop is an early sign of a degrading microinverter |
 | DC Energy (lifetime) | Lifetime energy taken from the panels, input side (kWh) |
+| Power Limit Commands | Number of power-limit commands sent to the inverter (by you, your automations or the overvoltage protection). Each may be written to the inverter's memory, whose endurance is unknown: keep an eye on it if an automation drives the limit |
+
+**Download diagnostics** (*Settings → Devices & Services → SOSSEN → ⋮*) gives a file with the inverter's state and registers, Local Key removed — please attach it when you open an issue.
+
+## Overvoltage protection
+
+The inverter disconnects from the grid around **253 V**, and its own production raises the voltage it measures. When the protection is on (switch *Overvoltage Protection*, settings in *Settings → Devices & Services → SOSSEN → Configure*), every 2 minutes:
+
+- at or above **249 V** the power limit goes down by **70 W** (never below 300 W),
+- at or below **245 V** it goes back up by **30 W** — only while the inverter is actually held by its limit, and never above the limit you chose,
+- in between, nothing changes.
+
+Down fast, up slowly: it does not oscillate, and a command is sent only when the limit really changes. All values are adjustable. It helps avoid trips, but **does not replace** your installation's protections: if your grid is often above 250 V, report it to your distribution operator.
 
 ## Supported models
 
@@ -95,11 +109,25 @@ English, Italian, German and French (config flow and entity names).
 
 ## Configuration
 
-During setup you will be asked for:
+*Settings → Devices & Services → Add Integration → SOSSEN*, then choose:
+
+### Smart Life login (recommended)
+
+No key and no IP to look up:
+
+1. Enter your **user code** from the Smart Life app: **Me → ⚙️ Settings → Account and Security → User Code**.
+2. Scan the QR code shown with the Smart Life app (scan icon, top right of the home screen) and confirm.
+3. Pick the inverters to add: their Device ID, Local Key and model are read from your account, and their address is found on your network automatically.
+
+The account is used **only during setup**: no token is stored, and all data then flows over your local network. One integration entry is created per inverter.
+
+### Manual setup
+
+If you prefer, enter the details yourself:
 
 | Field | Where to find it |
 |-------|-----------------|
-| **Device IP** | Check the DHCP client list in your router |
+| **Device IP** | Optional: leave it empty to find the inverter on the network automatically, or check the DHCP client list in your router |
 | **Device ID** | Smart Life app → your inverter → Settings (gear icon top right) → Device Information → Virtual ID |
 | **Local Key** | [Tuya IoT Platform](https://iot.tuya.com) → create a project → link your Smart Life account → Devices → All Devices → Local Key |
 
@@ -114,11 +142,11 @@ During setup you will be asked for:
 
 > **Note**: Tuya's own support assistant may claim that the Local Key can no longer be retrieved. It still can — see also [this step-by-step guide](https://www.remcokersten.nl/posts/get-tuya-localkey/) (thanks @TheB1gG).
 
-> **⚠️ The Local Key changes every time the inverter is removed and re-added in the app.** If you re-paired it, fetch the key again and re-add the integration. A wrong key shows up in the log as *"Inverter session refused (Tuya error 914)"*.
+> **⚠️ The Local Key changes every time the inverter is removed and re-added in the app.** If you re-paired it, remove and re-add the integration (the Smart Life login reads the new key for you). A wrong key shows up in the log as *"Inverter session refused (Tuya error 914)"*.
 >
 > **Using the Home Power app?** Remove the inverter from Home Power first, then add it in Smart Life (a device can only be bound to one account).
 
-> **Tip**: It is recommended to configure a static IP for the inverter in your router, so it doesn't change on reboot.
+> **Tip**: if the inverter's IP changes (router reboot, DHCP), the integration finds it again at its new address on its own; a static IP in your router is still the most robust setup.
 
 ## How it works
 
@@ -139,6 +167,12 @@ For an animated energy flow dashboard, install [Power Flow Card Plus](https://gi
 Developed by **caveman2024**.
 
 Born from the need to monitor a residential solar system with Astronergy N7S 450W bifacial panels, after discovering that standard Tuya integrations do not support the proprietary SOSSEN protocol.
+
+## Credits
+
+- The Smart Life QR login, the LAN discovery, the overvoltage protection algorithm, the diagnostics and the stream re-arm after a command are adapted from [SOSSEN Direct](https://github.com/ritonbrunis-lab/sossen-direct) by **@ritonbrunis-lab** (MIT) — thank you!
+- 4in1 channel 3/4 mapping: **@flrs-94** and **@Loudramin**.
+- Bounded device calls / non-blocking startup (v1.5.0): **@baptiste-devana**.
 
 ## License
 

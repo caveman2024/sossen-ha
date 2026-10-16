@@ -44,6 +44,70 @@ CONF_DEVICE_IP = "device_ip"
 CONF_LOCAL_KEY = "local_key"
 CONF_POLL_INTERVAL = "poll_interval"
 CONF_MODEL = "model"
+CONF_NAME = "name"
+
+# --- Smart Life login (setup only) ---------------------------------------
+# The QR login of the Smart Life / Home Power app is used once, during
+# setup, to read each inverter's Device ID and Local Key; no token is kept
+# and no data ever goes through the cloud afterwards. Same client as Home
+# Assistant's own Tuya integration (and other custom integrations doing
+# this). QR login approach adapted from ritonbrunis-lab/sossen-direct (MIT).
+CONF_USER_CODE = "user_code"
+TUYA_CLIENT_ID = "HA_3y9q4ak7g4ephrvke"
+TUYA_SCHEMA = "haauthorize"
+
+# --- LAN discovery ---------------------------------------------------------
+# Tuya devices announce themselves on UDP 6666/6667 and v3.5 devices answer
+# a REQ_DEVINFO probe sent to UDP 7000. Adapted from sossen-direct (MIT).
+DISCOVERY_PORTS = (6666, 6667, 7000)
+DISCOVERY_PROBE_PORT = 7000
+# Seconds the setup wizard searches before giving up / sweeping.
+LOCATE_TIMEOUT = 45
+LOCATE_PROBE_EVERY = 5
+# While the inverter is unreachable, look for it at a new address (DHCP
+# change) every this many powered-off probes (~5 min at OFF_POLL_INTERVAL).
+REDISCOVER_EVERY_OFF_PROBES = 5
+REDISCOVER_TIMEOUT = 12
+
+# --- Overvoltage protection (options) --------------------------------------
+# The inverter disconnects from the grid around 253 V, and the voltage it
+# measures rises with what it injects. Every interval: at or above the high
+# threshold the limit goes down one step, at or below the low threshold it
+# goes back up one smaller step (down fast, up slowly: no oscillation).
+# Algorithm adapted from sossen-direct (MIT). Off by default.
+CONF_PROTECTION = "protection"
+CONF_HIGH_VOLTAGE = "high_voltage"
+CONF_LOW_VOLTAGE = "low_voltage"
+CONF_STEP_DOWN = "step_down"
+CONF_STEP_UP = "step_up"
+CONF_MIN_LIMIT = "min_limit"
+CONF_INTERVAL = "interval"
+PROTECTION_DEFAULTS = {
+    CONF_PROTECTION: False,
+    CONF_HIGH_VOLTAGE: 249.0,
+    CONF_LOW_VOLTAGE: 245.0,
+    CONF_STEP_DOWN: 70,
+    CONF_STEP_UP: 30,
+    CONF_MIN_LIMIT: 300,
+    CONF_INTERVAL: 120,
+}
+# An inverter producing at least (limit - margin) W is held by its limit;
+# raising the limit of one producing well below it changes nothing.
+PROTECTION_RAISE_MARGIN = 40
+
+# entry.data keys maintained at runtime
+DATA_POWER_LIMIT = "power_limit_last"
+# The limit the user chose; overvoltage protection never raises above it.
+DATA_USER_LIMIT = "power_limit_user"
+DATA_LIMIT_COMMANDS = "limit_commands"
+
+
+def model_from_product(product_name: str) -> str:
+    """Guess the model family from the Tuya product name."""
+    text = (product_name or "").lower()
+    if "4in1" in text or "2400" in text:
+        return "4in1"
+    return "2in1"
 
 # Standard Tuya local TCP port, used to probe whether the inverter is powered.
 TUYA_PORT = 6668
@@ -110,7 +174,7 @@ RECONNECT_AFTER_FAILURES = 18
 # device boots: it needs ~2 min after power-on before answering.
 WARMUP_POLLS = 20
 
-PLATFORMS = [Platform.SENSOR, Platform.NUMBER]
+PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.SWITCH]
 
 
 def build_device_info(entry) -> dict:
@@ -119,7 +183,9 @@ def build_device_info(entry) -> dict:
     model = MODELS.get(model_key, MODELS[DEFAULT_MODEL])
     return {
         "identifiers": {(DOMAIN, entry.data[CONF_DEVICE_ID])},
-        "name": DEVICE_NAME,
+        # Named after the Smart Life device when set up via login; entries
+        # set up by hand keep the historical name (and thus entity ids).
+        "name": entry.data.get(CONF_NAME) or DEVICE_NAME,
         "manufacturer": "SOSSEN",
         "model": model["model"],
     }
