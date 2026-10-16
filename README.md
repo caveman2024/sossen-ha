@@ -29,7 +29,9 @@ Channel 3/4 sensors are created only for 4in1 models.
 
 | Control | Description |
 |---------|-------------|
-| Power Limit | Set the output power limit (500 W up to the model maximum) |
+| Power Limit | Set the output power limit (0 W up to the model maximum) |
+
+> **About the power limit**: the inverter does not jump to a new limit, it ramps towards it. Going down takes about 1–2 minutes to get close (a few minutes more for the last watts near 0 W), going back up about 1–2 minutes. The output may settle somewhat below the limit. Keep this in mind when driving the limit from an automation (e.g. zero-export): change it at most every couple of minutes, or the automation will chase its own ramp.
 
 ### Diagnostics
 

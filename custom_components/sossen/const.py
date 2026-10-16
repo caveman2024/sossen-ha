@@ -50,7 +50,8 @@ TUYA_PORT = 6668
 
 DEVICE_NAME = "SOSSEN Microinverter"
 DEFAULT_MODEL = "2in1"
-POWER_LIMIT_MIN = 500
+# Verified on a 2in1 (2026-10-16): 200/100/50/0 W are accepted and applied.
+POWER_LIMIT_MIN = 0
 POWER_LIMIT_STEP = 10
 
 # Supported inverter families. "channels" is the number of DC inputs (panels),

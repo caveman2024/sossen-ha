@@ -8,7 +8,7 @@ Direct communication over the local network — no cloud, no delays.
 
 * Real-time solar production sensors (power, voltage, current, frequency, temperature, energy) — per-panel channels included
 * **Inverter status** with 3 states: producing, alarm, off
-* **Power limit control** directly from HA (500 W up to the model maximum)
+* **Power limit control** directly from HA (0 W up to the model maximum)
 * **Automatic on/off detection** from the network (battery systems producing at night are supported): when off, power drops to 0, unmeasurable values go unavailable, the energy counter is preserved
 * **Diagnostic sensor** with all raw register values
 * **Real-time** updates (~20 seconds) from the inverter's own data stream
